@@ -3,7 +3,7 @@
  * Plugin Name: Nova Video Manager
  * Plugin URI: https://github.com/kbrookes/Nova-Video-Manager
  * Description: Automatically syncs YouTube videos from a channel and manages them as WordPress content with full metadata support.
- * Version: 0.2.4
+ * Version: 0.2.5
  * Author: Kelsey Brookes
  * Author URI: https://lovedlockedloaded.com
  * License: GPL v2 or later
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants
-define( 'NVM_VERSION', '0.2.4' );
+define( 'NVM_VERSION', '0.2.5' );
 define( 'NVM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'NVM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'NVM_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
