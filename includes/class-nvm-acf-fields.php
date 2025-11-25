@@ -39,7 +39,16 @@ class NVM_ACF_Fields {
      */
     private function __construct() {
         error_log( 'NVM ACF - Constructor called, adding hooks...' );
-        add_action( 'acf/init', array( $this, 'register_field_groups' ) );
+
+        // Check if ACF has already initialized
+        if ( did_action( 'acf/init' ) ) {
+            error_log( 'NVM ACF - acf/init already fired, registering fields immediately' );
+            $this->register_field_groups();
+        } else {
+            error_log( 'NVM ACF - acf/init not yet fired, adding hook' );
+            add_action( 'acf/init', array( $this, 'register_field_groups' ) );
+        }
+
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_relationship_scripts' ) );
         error_log( 'NVM ACF - Hooks added successfully' );
     }
