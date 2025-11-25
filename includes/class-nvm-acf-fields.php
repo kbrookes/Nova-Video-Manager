@@ -70,6 +70,7 @@ class NVM_ACF_Fields {
                     'required'      => 1,
                     'readonly'      => 1,
                     'instructions'  => __( 'The unique YouTube video ID.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_youtube_url',
@@ -79,6 +80,7 @@ class NVM_ACF_Fields {
                     'required'      => 1,
                     'readonly'      => 1,
                     'instructions'  => __( 'The full YouTube video URL.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_duration',
@@ -87,6 +89,7 @@ class NVM_ACF_Fields {
                     'type'          => 'text',
                     'readonly'      => 1,
                     'instructions'  => __( 'Video duration in ISO 8601 format.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_published_at',
@@ -97,6 +100,7 @@ class NVM_ACF_Fields {
                     'display_format' => 'F j, Y g:i a',
                     'return_format' => 'Y-m-d H:i:s',
                     'instructions'  => __( 'Original YouTube publish date.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_view_count',
@@ -105,6 +109,7 @@ class NVM_ACF_Fields {
                     'type'          => 'number',
                     'readonly'      => 1,
                     'instructions'  => __( 'Number of views on YouTube.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_like_count',
@@ -113,6 +118,7 @@ class NVM_ACF_Fields {
                     'type'          => 'number',
                     'readonly'      => 1,
                     'instructions'  => __( 'Number of likes on YouTube.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_comment_count',
@@ -121,6 +127,7 @@ class NVM_ACF_Fields {
                     'type'          => 'number',
                     'readonly'      => 1,
                     'instructions'  => __( 'Number of comments on YouTube.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_last_synced',
@@ -131,6 +138,7 @@ class NVM_ACF_Fields {
                     'display_format' => 'F j, Y g:i a',
                     'return_format' => 'Y-m-d H:i:s',
                     'instructions'  => __( 'Last time this video was synced from YouTube.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
                 array(
                     'key'           => 'field_nvm_description_modified',
@@ -140,6 +148,7 @@ class NVM_ACF_Fields {
                     'default_value' => 0,
                     'ui'            => 1,
                     'instructions'  => __( 'Check this to prevent the description from being overwritten during sync.', 'nova-video-manager' ),
+                    'show_in_rest'  => 1,
                 ),
             ),
             'location' => array(
@@ -156,6 +165,7 @@ class NVM_ACF_Fields {
             'style'                 => 'default',
             'label_placement'       => 'top',
             'instruction_placement' => 'label',
+            'show_in_rest'          => 1,
         ) );
     }
 
@@ -179,6 +189,7 @@ class NVM_ACF_Fields {
                     'min'           => 0,
                     'max'           => '',
                     'elements'      => '', // Allow all default elements including add new button
+                    'show_in_rest'  => 1,
                 ),
             ),
             'location' => array(
@@ -195,6 +206,7 @@ class NVM_ACF_Fields {
             'style'                 => 'default',
             'label_placement'       => 'top',
             'instruction_placement' => 'label',
+            'show_in_rest'          => 1,
         ) );
     }
 
