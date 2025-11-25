@@ -59,7 +59,8 @@ class NVM_Taxonomies {
      * Constructor
      */
     private function __construct() {
-        add_action( 'init', array( $this, 'register_taxonomies' ) );
+        // Register taxonomies immediately (called during init hook already)
+        $this->register_taxonomies();
     }
 
     /**

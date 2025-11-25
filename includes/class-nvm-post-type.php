@@ -45,7 +45,8 @@ class NVM_Post_Type {
      * Constructor
      */
     private function __construct() {
-        add_action( 'init', array( $this, 'register_post_type' ) );
+        // Register post type immediately (called during init hook already)
+        $this->register_post_type();
     }
     
     /**
