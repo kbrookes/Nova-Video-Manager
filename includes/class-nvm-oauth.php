@@ -115,7 +115,14 @@ class NVM_OAuth {
      * @return string
      */
     private function get_redirect_uri() {
-        return admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings' );
+        $redirect_uri = admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings' );
+
+        // Allow filtering for different environments (e.g., local vs production)
+        $redirect_uri = apply_filters( 'nvm_oauth_redirect_uri', $redirect_uri );
+
+        error_log( 'NVM OAuth - Redirect URI: ' . $redirect_uri );
+
+        return $redirect_uri;
     }
     
     /**
@@ -145,15 +152,22 @@ class NVM_OAuth {
         error_log( 'NVM OAuth Callback - User logged in: ' . ( is_user_logged_in() ? 'yes' : 'no' ) );
         error_log( 'NVM OAuth Callback - User ID: ' . get_current_user_id() );
         error_log( 'NVM OAuth Callback - Can manage options: ' . ( current_user_can( 'manage_options' ) ? 'yes' : 'no' ) );
+        error_log( 'NVM OAuth Callback - Request URI: ' . $_SERVER['REQUEST_URI'] );
+        error_log( 'NVM OAuth Callback - HTTP Host: ' . $_SERVER['HTTP_HOST'] );
 
         // Check if user is logged in
         if ( ! is_user_logged_in() ) {
-            wp_die( esc_html__( 'You must be logged in to complete OAuth authorization. Please log in and try again.', 'nova-video-manager' ) );
+            error_log( 'NVM OAuth Error - User not logged in' );
+            // Redirect to login with return URL
+            $return_url = add_query_arg( $_GET, admin_url( 'edit.php' ) );
+            wp_safe_redirect( wp_login_url( $return_url ) );
+            exit;
         }
 
         // Check user capabilities
         if ( ! current_user_can( 'manage_options' ) ) {
-            wp_die( esc_html__( 'You do not have permission to configure OAuth settings.', 'nova-video-manager' ) );
+            error_log( 'NVM OAuth Error - User lacks manage_options capability' );
+            wp_die( esc_html__( 'Unauthorized: You do not have permission to configure OAuth settings.', 'nova-video-manager' ) );
         }
 
         // Verify state parameter
