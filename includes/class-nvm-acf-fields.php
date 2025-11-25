@@ -38,20 +38,30 @@ class NVM_ACF_Fields {
      * Constructor
      */
     private function __construct() {
+        error_log( 'NVM ACF - Constructor called, adding hooks...' );
         add_action( 'acf/init', array( $this, 'register_field_groups' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_relationship_scripts' ) );
+        error_log( 'NVM ACF - Hooks added successfully' );
     }
     
     /**
      * Register ACF field groups
      */
     public function register_field_groups() {
+        error_log( 'NVM ACF - register_field_groups() called' );
+
         if ( ! function_exists( 'acf_add_local_field_group' ) ) {
+            error_log( 'NVM ACF - ERROR: acf_add_local_field_group() function not found!' );
             return;
         }
-        
+
+        error_log( 'NVM ACF - Registering video metadata fields...' );
         $this->register_video_metadata_fields();
+
+        error_log( 'NVM ACF - Registering community fields...' );
         $this->register_community_fields();
+
+        error_log( 'NVM ACF - Field groups registered successfully' );
     }
     
     /**

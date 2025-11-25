@@ -129,18 +129,27 @@ class Nova_Video_Manager {
      * Initialize plugin
      */
     public function init() {
+        error_log( 'NVM - init() called at priority 15' );
+
         // Always initialize components (ACF check happens in admin notice)
         NVM_Post_Type::get_instance();
         NVM_Member_Post_Type::get_instance();
         NVM_Taxonomies::get_instance();
 
         // Only initialize ACF-dependent components if ACF is available
-        if ( $this->is_acf_pro_active() ) {
+        $acf_active = $this->is_acf_pro_active();
+        error_log( 'NVM - ACF Pro active: ' . ( $acf_active ? 'yes' : 'no' ) );
+
+        if ( $acf_active ) {
+            error_log( 'NVM - Initializing ACF-dependent components...' );
             NVM_ACF_Fields::get_instance();
             NVM_OAuth::get_instance();
             NVM_Settings::get_instance();
             NVM_YouTube_API::get_instance();
             NVM_Sync::get_instance();
+            error_log( 'NVM - ACF-dependent components initialized' );
+        } else {
+            error_log( 'NVM - Skipping ACF-dependent components (ACF not active)' );
         }
     }
     
