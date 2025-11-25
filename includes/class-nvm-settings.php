@@ -269,13 +269,17 @@ class NVM_Settings {
      * Render OAuth section description
      */
     public function render_oauth_section() {
+        $redirect_uri = admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings' );
+        $redirect_uri = apply_filters( 'nvm_oauth_redirect_uri', $redirect_uri );
+
         echo '<p>' . esc_html__( 'Configure OAuth 2.0 credentials to access your YouTube channel data, including unlisted videos and playlists.', 'nova-video-manager' ) . '</p>';
         echo '<p>' . sprintf(
             /* translators: %s: URL to Google Cloud Console */
             esc_html__( 'Create OAuth 2.0 credentials in the %s. Set the redirect URI to: %s', 'nova-video-manager' ),
             '<a href="https://console.cloud.google.com/apis/credentials" target="_blank">' . esc_html__( 'Google Cloud Console', 'nova-video-manager' ) . '</a>',
-            '<code>' . esc_html( admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings' ) ) . '</code>'
+            '<code>' . esc_html( $redirect_uri ) . '</code>'
         ) . '</p>';
+        echo '<p class="description">' . esc_html__( 'Important: The redirect URI in Google Cloud Console must match exactly (including http/https and trailing slashes).', 'nova-video-manager' ) . '</p>';
     }
 
     /**
