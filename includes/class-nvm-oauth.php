@@ -230,6 +230,11 @@ class NVM_OAuth {
         error_log( 'NVM OAuth - Client Secret length: ' . strlen( $client_secret ) );
         error_log( 'NVM OAuth - Redirect URI: ' . $redirect_uri );
 
+        // Validate client secret looks reasonable (Google secrets are typically 24-35 chars)
+        if ( strlen( $client_secret ) > 50 ) {
+            error_log( 'NVM OAuth - WARNING: Client Secret is unusually long (' . strlen( $client_secret ) . ' chars). This may indicate decryption failure. Please re-enter your OAuth credentials in the settings.' );
+        }
+
         $response = wp_remote_post( self::TOKEN_URL, array(
             'body' => array(
                 'code'          => $code,
@@ -429,6 +434,7 @@ class NVM_OAuth {
         $data = base64_decode( $encrypted );
 
         if ( ! $data ) {
+            error_log( 'NVM OAuth - Decryption failed: Invalid base64 data' );
             return false;
         }
 
@@ -436,7 +442,13 @@ class NVM_OAuth {
         $iv = substr( $data, 0, $iv_length );
         $encrypted_data = substr( $data, $iv_length );
 
-        return openssl_decrypt( $encrypted_data, 'aes-256-cbc', $key, 0, $iv );
+        $decrypted = openssl_decrypt( $encrypted_data, 'aes-256-cbc', $key, 0, $iv );
+
+        if ( $decrypted === false ) {
+            error_log( 'NVM OAuth - Decryption failed: OpenSSL error. This usually means the encryption key (WordPress salts) has changed. Please re-enter your OAuth credentials.' );
+        }
+
+        return $decrypted;
     }
 
     /**
