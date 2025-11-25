@@ -47,7 +47,12 @@ class NVM_Member_Post_Type {
         // Register post type immediately (called during init hook already)
         $this->register_post_type();
 
-        add_action( 'acf/init', array( $this, 'register_acf_fields' ) );
+        // Check if ACF has already initialized
+        if ( did_action( 'acf/init' ) ) {
+            $this->register_acf_fields();
+        } else {
+            add_action( 'acf/init', array( $this, 'register_acf_fields' ) );
+        }
 
         // Add custom columns to admin list
         add_filter( 'manage_' . self::POST_TYPE . '_posts_columns', array( $this, 'add_custom_columns' ) );
@@ -139,6 +144,7 @@ class NVM_Member_Post_Type {
                     ),
                 ),
             ),
+            'show_in_rest' => 1, // Enable REST API for Bricks
         ) );
     }
 
