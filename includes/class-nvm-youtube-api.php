@@ -84,9 +84,10 @@ class NVM_YouTube_API {
      *
      * @param int $max_results Maximum number of results to fetch
      * @param string $page_token Page token for pagination
+     * @param string|null $published_after RFC 3339 formatted date-time to fetch videos published after this time
      * @return array|WP_Error Array of videos or WP_Error on failure
      */
-    public function get_channel_videos( $max_results = 50, $page_token = '' ) {
+    public function get_channel_videos( $max_results = 50, $page_token = '', $published_after = null ) {
         if ( ! $this->is_configured() ) {
             return new WP_Error( 'not_configured', __( 'YouTube API is not configured. Please authenticate with OAuth.', 'nova-video-manager' ) );
         }
@@ -103,6 +104,11 @@ class NVM_YouTube_API {
 
         if ( ! empty( $page_token ) ) {
             $params['pageToken'] = $page_token;
+        }
+
+        // Add publishedAfter for incremental sync
+        if ( ! empty( $published_after ) ) {
+            $params['publishedAfter'] = $published_after;
         }
 
         $url = add_query_arg( $params, self::API_BASE_URL . '/search' );
@@ -132,7 +138,7 @@ class NVM_YouTube_API {
             return new WP_Error( 'invalid_response', __( 'Invalid response from YouTube API.', 'nova-video-manager' ) );
         }
 
-        error_log( 'NVM YouTube API - Fetched ' . count( $data['items'] ) . ' videos from search (forMine=true)' );
+        error_log( 'NVM YouTube API - Fetched ' . count( $data['items'] ) . ' videos from search' . ( $published_after ? ' (publishedAfter: ' . $published_after . ')' : '' ) );
 
         return array(
             'videos' => $data['items'],

@@ -499,9 +499,9 @@ class NVM_Settings {
             wp_send_json_error( array( 'message' => __( 'Unauthorized', 'nova-video-manager' ) ) );
         }
 
-        // Trigger sync
+        // Manual sync is always a full sync (not incremental)
         $sync = NVM_Sync::get_instance();
-        $result = $sync->sync_videos();
+        $result = $sync->sync_videos( 0, true );
 
         if ( is_wp_error( $result ) ) {
             wp_send_json_error( array( 'message' => $result->get_error_message() ) );

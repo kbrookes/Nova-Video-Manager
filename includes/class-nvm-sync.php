@@ -52,20 +52,37 @@ class NVM_Sync {
      * Sync videos from YouTube
      *
      * @param int $max_videos Maximum number of videos to sync (0 for all)
+     * @param bool $full_sync Whether to do a full sync or incremental sync (default: false = incremental)
      * @return int|WP_Error Number of videos synced or WP_Error on failure
      */
-    public function sync_videos( $max_videos = 0 ) {
+    public function sync_videos( $max_videos = 0, $full_sync = false ) {
         if ( ! $this->youtube_api->is_configured() ) {
             return new WP_Error( 'not_configured', __( 'YouTube API is not configured. Please configure it in settings.', 'nova-video-manager' ) );
         }
-        
+
         $synced_count = 0;
         $page_token = '';
         $continue = true;
-        
+
+        // For incremental sync, only fetch videos published after last sync
+        $published_after = null;
+        if ( ! $full_sync ) {
+            $last_sync_time = get_option( 'nvm_last_sync_time', 0 );
+            if ( $last_sync_time > 0 ) {
+                // YouTube API expects RFC 3339 formatted date-time
+                // Subtract 1 hour to account for any timezone issues or videos published during last sync
+                $published_after = gmdate( 'Y-m-d\TH:i:s\Z', $last_sync_time - 3600 );
+                error_log( 'NVM Sync - Incremental sync: fetching videos published after ' . $published_after );
+            } else {
+                error_log( 'NVM Sync - No previous sync found, doing full sync' );
+            }
+        } else {
+            error_log( 'NVM Sync - Full sync requested' );
+        }
+
         while ( $continue ) {
             // Get videos from YouTube (using uploads playlist)
-            $result = $this->youtube_api->get_channel_videos( 50, $page_token );
+            $result = $this->youtube_api->get_channel_videos( 50, $page_token, $published_after );
 
             if ( is_wp_error( $result ) ) {
                 return $result;
@@ -117,10 +134,12 @@ class NVM_Sync {
                 $continue = false;
             }
         }
-        
+
         // Update last sync time
         update_option( 'nvm_last_sync_time', time() );
-        
+
+        error_log( 'NVM Sync - Completed: ' . $synced_count . ' videos synced' );
+
         return $synced_count;
     }
     
