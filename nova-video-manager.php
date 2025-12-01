@@ -3,7 +3,7 @@
  * Plugin Name: Nova Video Manager
  * Plugin URI: https://github.com/kbrookes/Nova-Video-Manager
  * Description: Automatically syncs YouTube videos from a channel and manages them as WordPress content with full metadata support.
- * Version: 0.2.7
+ * Version: 0.3.0
  * Author: Kelsey Brookes
  * Author URI: https://lovedlockedloaded.com
  * License: GPL v2 or later
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants
-define( 'NVM_VERSION', '0.2.7' );
+define( 'NVM_VERSION', '0.3.0' );
 define( 'NVM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'NVM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'NVM_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
@@ -72,9 +72,6 @@ class Nova_Video_Manager {
         add_action( 'plugins_loaded', array( $this, 'load_textdomain' ) );
         add_action( 'admin_notices', array( $this, 'check_acf_and_show_notice' ) );
         add_action( 'init', array( $this, 'init' ), 15 ); // Priority 15 to ensure ACF is loaded first
-        add_action( 'nvm_sync_videos', array( $this, 'run_scheduled_sync' ) );
-        add_action( 'update_option_nvm_auto_sync', array( $this, 'handle_auto_sync_change' ), 10, 2 );
-        add_action( 'update_option_nvm_sync_frequency', array( $this, 'handle_sync_frequency_change' ), 10, 2 );
     }
     
     /**
@@ -90,6 +87,7 @@ class Nova_Video_Manager {
         require_once NVM_PLUGIN_DIR . 'includes/class-nvm-settings.php';
         require_once NVM_PLUGIN_DIR . 'includes/class-nvm-youtube-api.php';
         require_once NVM_PLUGIN_DIR . 'includes/class-nvm-sync.php';
+        require_once NVM_PLUGIN_DIR . 'includes/class-nvm-cron.php';
     }
 
     /**
@@ -147,6 +145,7 @@ class Nova_Video_Manager {
             NVM_Settings::get_instance();
             NVM_YouTube_API::get_instance();
             NVM_Sync::get_instance();
+            NVM_Cron::get_instance();
             error_log( 'NVM - ACF-dependent components initialized' );
         } else {
             error_log( 'NVM - Skipping ACF-dependent components (ACF not active)' );
@@ -191,11 +190,8 @@ class Nova_Video_Manager {
      */
     public function deactivate() {
         // Clear scheduled cron jobs
-        $timestamp = wp_next_scheduled( 'nvm_sync_videos' );
-        if ( $timestamp ) {
-            wp_unschedule_event( $timestamp, 'nvm_sync_videos' );
-        }
-        
+        NVM_Cron::unschedule_all();
+
         // Flush rewrite rules
         flush_rewrite_rules();
     }
@@ -225,66 +221,6 @@ class Nova_Video_Manager {
             <p><?php esc_html_e( 'Nova Video Manager requires Advanced Custom Fields Pro to be installed and activated.', 'nova-video-manager' ); ?></p>
         </div>
         <?php
-    }
-
-    /**
-     * Run scheduled sync
-     */
-    public function run_scheduled_sync() {
-        if ( ! get_option( 'nvm_auto_sync', false ) ) {
-            return;
-        }
-
-        $sync = NVM_Sync::get_instance();
-        $sync->sync_videos();
-    }
-
-    /**
-     * Handle auto sync setting change
-     *
-     * @param mixed $old_value Old value
-     * @param mixed $new_value New value
-     */
-    public function handle_auto_sync_change( $old_value, $new_value ) {
-        if ( $new_value ) {
-            $this->schedule_sync();
-        } else {
-            $this->unschedule_sync();
-        }
-    }
-
-    /**
-     * Handle sync frequency change
-     *
-     * @param mixed $old_value Old value
-     * @param mixed $new_value New value
-     */
-    public function handle_sync_frequency_change( $old_value, $new_value ) {
-        if ( get_option( 'nvm_auto_sync', false ) ) {
-            $this->unschedule_sync();
-            $this->schedule_sync();
-        }
-    }
-
-    /**
-     * Schedule sync cron job
-     */
-    private function schedule_sync() {
-        $frequency = get_option( 'nvm_sync_frequency', 'hourly' );
-
-        if ( ! wp_next_scheduled( 'nvm_sync_videos' ) ) {
-            wp_schedule_event( time(), $frequency, 'nvm_sync_videos' );
-        }
-    }
-
-    /**
-     * Unschedule sync cron job
-     */
-    private function unschedule_sync() {
-        $timestamp = wp_next_scheduled( 'nvm_sync_videos' );
-        if ( $timestamp ) {
-            wp_unschedule_event( $timestamp, 'nvm_sync_videos' );
-        }
     }
 }
 
