@@ -44,32 +44,33 @@
         }
 
         /**
-         * Handle manual sync button click
+         * Handle sync button clicks (both full and incremental)
          */
-        $('#nvm-manual-sync-btn').on('click', function() {
+        function handleSync(action, nonce, buttonText) {
             var $button = $(this);
+            var $allButtons = $('#nvm-full-sync-btn, #nvm-incremental-sync-btn');
             var $status = $('#nvm-sync-status');
-            
-            // Disable button
-            $button.prop('disabled', true);
-            
+
+            // Disable all sync buttons
+            $allButtons.prop('disabled', true);
+
             // Show loading status
             $status.removeClass('success error').addClass('loading');
-            $status.text('Syncing videos from YouTube...');
-            
+            $status.text(buttonText);
+
             // Make AJAX request
             $.ajax({
                 url: nvmAdmin.ajaxUrl,
                 type: 'POST',
                 data: {
-                    action: 'nvm_manual_sync',
-                    nonce: nvmAdmin.nonce
+                    action: action,
+                    nonce: nonce
                 },
                 success: function(response) {
                     if (response.success) {
                         $status.removeClass('loading error').addClass('success');
                         $status.text(response.data.message);
-                        
+
                         // Reload page after 2 seconds to update stats
                         setTimeout(function() {
                             location.reload();
@@ -84,10 +85,20 @@
                     $status.text('An error occurred: ' + error);
                 },
                 complete: function() {
-                    // Re-enable button
-                    $button.prop('disabled', false);
+                    // Re-enable all buttons
+                    $allButtons.prop('disabled', false);
                 }
             });
+        }
+
+        // Full sync button
+        $('#nvm-full-sync-btn').on('click', function() {
+            handleSync.call(this, 'nvm_manual_sync', nvmAdmin.manualSyncNonce, 'Running full sync (all videos)...');
+        });
+
+        // Incremental sync button
+        $('#nvm-incremental-sync-btn').on('click', function() {
+            handleSync.call(this, 'nvm_incremental_sync', nvmAdmin.incrementalSyncNonce, 'Running incremental sync (new videos only)...');
         });
         
     });

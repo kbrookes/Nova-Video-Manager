@@ -50,6 +50,7 @@ class NVM_Settings {
         add_action( 'admin_init', array( $this, 'handle_oauth_disconnect' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
         add_action( 'wp_ajax_nvm_manual_sync', array( $this, 'handle_manual_sync' ) );
+        add_action( 'wp_ajax_nvm_incremental_sync', array( $this, 'handle_incremental_sync' ) );
     }
     
     /**
@@ -193,7 +194,8 @@ class NVM_Settings {
             'nvmAdmin',
             array(
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-                'nonce'   => wp_create_nonce( 'nvm_manual_sync' ),
+                'manualSyncNonce'   => wp_create_nonce( 'nvm_manual_sync' ),
+                'incrementalSyncNonce'   => wp_create_nonce( 'nvm_incremental_sync' ),
             )
         );
     }
@@ -236,9 +238,18 @@ class NVM_Settings {
                     <div class="nvm-sync-controls">
                         <h2><?php esc_html_e( 'Manual Sync', 'nova-video-manager' ); ?></h2>
                         <p><?php esc_html_e( 'Manually trigger a sync of videos from YouTube.', 'nova-video-manager' ); ?></p>
-                        <button type="button" id="nvm-manual-sync-btn" class="button button-primary">
-                            <?php esc_html_e( 'Sync Now', 'nova-video-manager' ); ?>
-                        </button>
+                        <div style="margin-bottom: 10px;">
+                            <button type="button" id="nvm-incremental-sync-btn" class="button button-secondary" style="margin-right: 5px;">
+                                <?php esc_html_e( 'Sync New', 'nova-video-manager' ); ?>
+                            </button>
+                            <button type="button" id="nvm-full-sync-btn" class="button button-primary">
+                                <?php esc_html_e( 'Full Sync', 'nova-video-manager' ); ?>
+                            </button>
+                        </div>
+                        <p class="description">
+                            <?php esc_html_e( 'Sync New: Only fetch videos published since last sync (fast)', 'nova-video-manager' ); ?><br>
+                            <?php esc_html_e( 'Full Sync: Fetch all videos from your channel (slow)', 'nova-video-manager' ); ?>
+                        </p>
                         <div id="nvm-sync-status"></div>
                     </div>
 
@@ -490,7 +501,7 @@ class NVM_Settings {
     }
 
     /**
-     * Handle manual sync AJAX request
+     * Handle manual sync AJAX request (full sync)
      */
     public function handle_manual_sync() {
         check_ajax_referer( 'nvm_manual_sync', 'nonce' );
@@ -510,7 +521,34 @@ class NVM_Settings {
         wp_send_json_success( array(
             'message' => sprintf(
                 /* translators: %d: number of videos synced */
-                __( 'Successfully synced %d videos.', 'nova-video-manager' ),
+                __( 'Full sync completed: %d videos synced.', 'nova-video-manager' ),
+                $result
+            )
+        ) );
+    }
+
+    /**
+     * Handle incremental sync AJAX request
+     */
+    public function handle_incremental_sync() {
+        check_ajax_referer( 'nvm_incremental_sync', 'nonce' );
+
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Unauthorized', 'nova-video-manager' ) ) );
+        }
+
+        // Incremental sync - only fetch new videos
+        $sync = NVM_Sync::get_instance();
+        $result = $sync->sync_videos( 0, false );
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( array(
+            'message' => sprintf(
+                /* translators: %d: number of videos synced */
+                __( 'Incremental sync completed: %d new videos synced.', 'nova-video-manager' ),
                 $result
             )
         ) );
