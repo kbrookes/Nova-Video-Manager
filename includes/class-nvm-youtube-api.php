@@ -92,6 +92,9 @@ class NVM_YouTube_API {
             return new WP_Error( 'not_configured', __( 'YouTube API is not configured. Please authenticate with OAuth.', 'nova-video-manager' ) );
         }
 
+        // Debug: Log the channel ID being used
+        error_log( 'NVM YouTube API - Using channel ID: ' . $this->channel_id );
+
         // Use search.list with channelId to get ALL videos (public, unlisted, private) from specific channel
         // forMine=true alone would get videos from all channels owned by the user
         $params = array(
@@ -112,6 +115,9 @@ class NVM_YouTube_API {
         }
 
         $url = add_query_arg( $params, self::API_BASE_URL . '/search' );
+
+        // Debug: Log the full API URL (without access token)
+        error_log( 'NVM YouTube API - Search URL: ' . $url );
 
         // Make authenticated request
         $response = $this->make_authenticated_request( $url );
@@ -139,6 +145,20 @@ class NVM_YouTube_API {
         }
 
         error_log( 'NVM YouTube API - Fetched ' . count( $data['items'] ) . ' videos from search' . ( $published_after ? ' (publishedAfter: ' . $published_after . ')' : '' ) );
+
+        // Debug: Log channel IDs of returned videos to verify they're from the correct channel
+        if ( ! empty( $data['items'] ) ) {
+            foreach ( $data['items'] as $item ) {
+                $video_channel_id = isset( $item['snippet']['channelId'] ) ? $item['snippet']['channelId'] : 'UNKNOWN';
+                $video_title = isset( $item['snippet']['title'] ) ? $item['snippet']['title'] : 'UNKNOWN';
+                error_log( 'NVM YouTube API - Video: "' . $video_title . '" from channel: ' . $video_channel_id );
+
+                // Alert if video is from wrong channel
+                if ( $video_channel_id !== $this->channel_id ) {
+                    error_log( 'NVM YouTube API - WARNING: Video from DIFFERENT channel! Expected: ' . $this->channel_id . ', Got: ' . $video_channel_id );
+                }
+            }
+        }
 
         return array(
             'videos' => $data['items'],
