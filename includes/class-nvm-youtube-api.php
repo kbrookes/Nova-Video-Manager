@@ -95,29 +95,34 @@ class NVM_YouTube_API {
         // Debug: Log the channel ID being used
         error_log( 'NVM YouTube API - Using channel ID: ' . $this->channel_id );
 
-        // Use search.list with channelId to get ALL videos (public, unlisted, private) from specific channel
-        // forMine=true alone would get videos from all channels owned by the user
+        // IMPORTANT: search.list with channelId doesn't work reliably with OAuth - it returns videos from other channels!
+        // Instead, we use the channel's "uploads" playlist which contains ALL videos (public, unlisted, private)
+        // This is the recommended approach per YouTube API documentation
+
+        // Get the uploads playlist ID for this channel
+        $uploads_playlist_id = $this->get_uploads_playlist_id();
+
+        if ( is_wp_error( $uploads_playlist_id ) ) {
+            return $uploads_playlist_id;
+        }
+
+        error_log( 'NVM YouTube API - Using uploads playlist ID: ' . $uploads_playlist_id );
+
+        // Use playlistItems.list to get videos from the uploads playlist
         $params = array(
             'part' => 'snippet',
-            'channelId' => $this->channel_id,
-            'type' => 'video',
+            'playlistId' => $uploads_playlist_id,
             'maxResults' => min( $max_results, 50 ), // YouTube API max is 50
-            'order' => 'date', // Most recent first
         );
 
         if ( ! empty( $page_token ) ) {
             $params['pageToken'] = $page_token;
         }
 
-        // Add publishedAfter for incremental sync
-        if ( ! empty( $published_after ) ) {
-            $params['publishedAfter'] = $published_after;
-        }
-
-        $url = add_query_arg( $params, self::API_BASE_URL . '/search' );
+        $url = add_query_arg( $params, self::API_BASE_URL . '/playlistItems' );
 
         // Debug: Log the full API URL (without access token)
-        error_log( 'NVM YouTube API - Search URL: ' . $url );
+        error_log( 'NVM YouTube API - PlaylistItems URL: ' . $url );
 
         // Make authenticated request
         $response = $this->make_authenticated_request( $url );
@@ -144,24 +149,42 @@ class NVM_YouTube_API {
             return new WP_Error( 'invalid_response', __( 'Invalid response from YouTube API.', 'nova-video-manager' ) );
         }
 
-        error_log( 'NVM YouTube API - Fetched ' . count( $data['items'] ) . ' videos from search' . ( $published_after ? ' (publishedAfter: ' . $published_after . ')' : '' ) );
+        error_log( 'NVM YouTube API - Fetched ' . count( $data['items'] ) . ' videos from uploads playlist' );
 
-        // Debug: Log channel IDs of returned videos to verify they're from the correct channel
-        if ( ! empty( $data['items'] ) ) {
-            foreach ( $data['items'] as $item ) {
-                $video_channel_id = isset( $item['snippet']['channelId'] ) ? $item['snippet']['channelId'] : 'UNKNOWN';
-                $video_title = isset( $item['snippet']['title'] ) ? $item['snippet']['title'] : 'UNKNOWN';
-                error_log( 'NVM YouTube API - Video: "' . $video_title . '" from channel: ' . $video_channel_id );
-
-                // Alert if video is from wrong channel
-                if ( $video_channel_id !== $this->channel_id ) {
-                    error_log( 'NVM YouTube API - WARNING: Video from DIFFERENT channel! Expected: ' . $this->channel_id . ', Got: ' . $video_channel_id );
+        // playlistItems.list returns items with snippet.resourceId.videoId instead of id.videoId
+        // We need to transform the response to match what the sync expects
+        $videos = array();
+        foreach ( $data['items'] as $item ) {
+            // Skip if publishedAfter filter is set and video is older
+            if ( ! empty( $published_after ) ) {
+                $published_at = strtotime( $item['snippet']['publishedAt'] );
+                $filter_time = strtotime( $published_after );
+                if ( $published_at < $filter_time ) {
+                    continue; // Skip this video
                 }
+            }
+
+            // Transform playlistItem format to search format
+            $video = array(
+                'id' => $item['snippet']['resourceId']['videoId'],
+                'snippet' => $item['snippet'],
+            );
+
+            $videos[] = $video;
+
+            // Debug: Log video details
+            $video_title = isset( $item['snippet']['title'] ) ? $item['snippet']['title'] : 'UNKNOWN';
+            $video_channel_id = isset( $item['snippet']['channelId'] ) ? $item['snippet']['channelId'] : 'UNKNOWN';
+            error_log( 'NVM YouTube API - Video: "' . $video_title . '" from channel: ' . $video_channel_id );
+
+            // Alert if video is from wrong channel (should never happen with uploads playlist)
+            if ( $video_channel_id !== $this->channel_id ) {
+                error_log( 'NVM YouTube API - WARNING: Video from DIFFERENT channel! Expected: ' . $this->channel_id . ', Got: ' . $video_channel_id );
             }
         }
 
         return array(
-            'videos' => $data['items'],
+            'videos' => $videos,
             'nextPageToken' => isset( $data['nextPageToken'] ) ? $data['nextPageToken'] : '',
             'totalResults' => isset( $data['pageInfo']['totalResults'] ) ? $data['pageInfo']['totalResults'] : 0,
         );
