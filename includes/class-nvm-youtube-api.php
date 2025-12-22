@@ -152,7 +152,7 @@ class NVM_YouTube_API {
         error_log( 'NVM YouTube API - Fetched ' . count( $data['items'] ) . ' videos from uploads playlist' );
 
         // playlistItems.list returns items with snippet.resourceId.videoId instead of id.videoId
-        // We need to transform the response to match what the sync expects
+        // We need to transform the response to match what the sync expects (search.list format)
         $videos = array();
         foreach ( $data['items'] as $item ) {
             // Skip if publishedAfter filter is set and video is older
@@ -164,9 +164,13 @@ class NVM_YouTube_API {
                 }
             }
 
-            // Transform playlistItem format to search format
+            // Transform playlistItem format to search.list format
+            // search.list returns: { id: { videoId: "xxx" }, snippet: {...} }
+            // playlistItems.list returns: { snippet: { resourceId: { videoId: "xxx" }, ... } }
             $video = array(
-                'id' => $item['snippet']['resourceId']['videoId'],
+                'id' => array(
+                    'videoId' => $item['snippet']['resourceId']['videoId'],
+                ),
                 'snippet' => $item['snippet'],
             );
 
