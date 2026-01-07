@@ -342,6 +342,7 @@ class NVM_Settings {
 
         if ( $oauth->is_authenticated() ) {
             $authenticated_at = get_option( 'nvm_oauth_authenticated_at' );
+            $token_status = $oauth->get_token_status();
             ?>
             <div class="nvm-oauth-status nvm-oauth-connected">
                 <span class="dashicons dashicons-yes-alt" style="color: #46b450;"></span>
@@ -354,6 +355,20 @@ class NVM_Settings {
                         ?>
                     </p>
                 <?php endif; ?>
+
+                <?php if ( ! empty( $token_status['warning'] ) ) : ?>
+                    <div class="notice notice-warning inline" style="margin: 10px 0; padding: 8px 12px;">
+                        <p style="margin: 0;">
+                            <span class="dashicons dashicons-warning" style="color: #f0b849;"></span>
+                            <strong><?php esc_html_e( 'Warning:', 'nova-video-manager' ); ?></strong>
+                            <?php echo esc_html( $token_status['warning'] ); ?>
+                        </p>
+                        <p style="margin: 5px 0 0 0;">
+                            <?php esc_html_e( 'If you experience sync issues, disconnect and reconnect to refresh your authentication.', 'nova-video-manager' ); ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
+
                 <p>
                     <a href="<?php echo esc_url( wp_nonce_url( admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings&action=nvm_oauth_disconnect' ), 'nvm_oauth_disconnect' ) ); ?>"
                        class="button button-secondary"

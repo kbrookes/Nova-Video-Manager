@@ -76,6 +76,41 @@ class NVM_OAuth {
         $access_token = $this->get_access_token();
         return ! empty( $access_token );
     }
+
+    /**
+     * Get OAuth token status information
+     *
+     * @return array Status information
+     */
+    public function get_token_status() {
+        $access_token = $this->get_decrypted_option( 'nvm_oauth_access_token' );
+        $refresh_token = $this->get_decrypted_option( 'nvm_oauth_refresh_token' );
+        $expires_at = get_option( 'nvm_oauth_expires_at', 0 );
+        $authenticated_at = get_option( 'nvm_oauth_authenticated_at', 0 );
+
+        $status = array(
+            'has_access_token' => ! empty( $access_token ),
+            'has_refresh_token' => ! empty( $refresh_token ),
+            'expires_at' => $expires_at,
+            'authenticated_at' => $authenticated_at,
+            'is_expired' => $expires_at && time() >= $expires_at,
+            'time_until_expiry' => $expires_at ? $expires_at - time() : 0,
+        );
+
+        // Check if authentication is old (might indicate refresh token issues)
+        if ( $authenticated_at ) {
+            $days_since_auth = ( time() - $authenticated_at ) / DAY_IN_SECONDS;
+            $status['days_since_auth'] = $days_since_auth;
+
+            // Google refresh tokens can expire after 6 months of inactivity
+            // Warn if approaching that limit
+            if ( $days_since_auth > 150 ) { // ~5 months
+                $status['warning'] = 'OAuth connection is old. If sync fails, you may need to re-authenticate.';
+            }
+        }
+
+        return $status;
+    }
     
     /**
      * Get authorization URL
@@ -302,8 +337,17 @@ class NVM_OAuth {
 
         // Check if token is expired or about to expire (5 minute buffer)
         if ( $expires_at && ( time() + 300 ) >= $expires_at ) {
-            $this->refresh_access_token();
+            error_log( 'NVM OAuth - Access token expired or expiring soon, attempting refresh...' );
+            $refresh_result = $this->refresh_access_token();
+
+            if ( is_wp_error( $refresh_result ) ) {
+                error_log( 'NVM OAuth - Token refresh FAILED: ' . $refresh_result->get_error_message() );
+                error_log( 'NVM OAuth - You need to re-authenticate. Go to Videos → Settings and click "Connect to YouTube"' );
+                return false;
+            }
+
             $access_token = $this->get_decrypted_option( 'nvm_oauth_access_token' );
+            error_log( 'NVM OAuth - Token refresh successful' );
         }
 
         return $access_token;
@@ -318,11 +362,14 @@ class NVM_OAuth {
         $refresh_token = $this->get_decrypted_option( 'nvm_oauth_refresh_token' );
 
         if ( ! $refresh_token ) {
-            return new WP_Error( 'no_refresh_token', __( 'No refresh token available.', 'nova-video-manager' ) );
+            error_log( 'NVM OAuth - No refresh token available. User needs to re-authenticate.' );
+            return new WP_Error( 'no_refresh_token', __( 'No refresh token available. Please re-authenticate.', 'nova-video-manager' ) );
         }
 
         $client_id = get_option( 'nvm_oauth_client_id' );
         $client_secret = $this->get_decrypted_option( 'nvm_oauth_client_secret' );
+
+        error_log( 'NVM OAuth - Attempting to refresh access token...' );
 
         $response = wp_remote_post( self::TOKEN_URL, array(
             'body' => array(
@@ -334,17 +381,32 @@ class NVM_OAuth {
         ) );
 
         if ( is_wp_error( $response ) ) {
+            error_log( 'NVM OAuth - Refresh request failed: ' . $response->get_error_message() );
             return $response;
         }
 
+        $response_code = wp_remote_retrieve_response_code( $response );
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
+        error_log( 'NVM OAuth - Refresh response code: ' . $response_code );
+
         if ( isset( $body['error'] ) ) {
-            return new WP_Error( 'refresh_error', $body['error_description'] ?? $body['error'] );
+            $error_msg = $body['error_description'] ?? $body['error'];
+            error_log( 'NVM OAuth - Refresh failed: ' . $error_msg );
+
+            // Common errors:
+            // - invalid_grant: Refresh token expired or revoked
+            // - invalid_client: Client credentials are wrong
+            if ( $body['error'] === 'invalid_grant' ) {
+                error_log( 'NVM OAuth - Refresh token is invalid or expired. User needs to re-authenticate.' );
+            }
+
+            return new WP_Error( 'refresh_error', $error_msg );
         }
 
         // Store new access token
         $this->store_tokens( $body );
+        error_log( 'NVM OAuth - Access token refreshed successfully' );
 
         return true;
     }
