@@ -154,31 +154,41 @@ class NVM_Sync {
         $snippet = $video['snippet'];
         $content_details = $video['contentDetails'];
         $statistics = isset( $video['statistics'] ) ? $video['statistics'] : array();
-        
+        $status = isset( $video['status'] ) ? $video['status'] : array();
+
         // Check if video already exists
         $existing_post = $this->get_post_by_youtube_id( $video_id );
-        
+
+        // Determine WordPress post status and schedule based on YouTube status
+        $post_status_data = $this->get_post_status_from_youtube( $status, $snippet );
+
         $post_data = array(
             'post_type'    => NVM_Post_Type::POST_TYPE,
             'post_title'   => $snippet['title'],
-            'post_status'  => 'publish',
+            'post_status'  => $post_status_data['post_status'],
         );
-        
+
+        // Set scheduled publish date if applicable
+        if ( ! empty( $post_status_data['post_date'] ) ) {
+            $post_data['post_date'] = $post_status_data['post_date'];
+            $post_data['post_date_gmt'] = $post_status_data['post_date_gmt'];
+        }
+
         // Only update description if it hasn't been manually modified
         if ( $existing_post ) {
             $description_modified = get_field( 'nvm_description_modified', $existing_post );
-            
+
             if ( ! $description_modified ) {
                 $post_data['post_content'] = $snippet['description'];
             }
-            
+
             $post_data['ID'] = $existing_post;
             $post_id = wp_update_post( $post_data );
         } else {
             $post_data['post_content'] = $snippet['description'];
             $post_id = wp_insert_post( $post_data );
         }
-        
+
         if ( is_wp_error( $post_id ) ) {
             return $post_id;
         }
@@ -189,6 +199,16 @@ class NVM_Sync {
         update_field( 'nvm_duration', $content_details['duration'], $post_id );
         update_field( 'nvm_published_at', date( 'Y-m-d H:i:s', strtotime( $snippet['publishedAt'] ) ), $post_id );
         update_field( 'nvm_last_synced', date( 'Y-m-d H:i:s' ), $post_id );
+
+        // Store YouTube privacy status and schedule info
+        if ( ! empty( $status ) ) {
+            if ( isset( $status['privacyStatus'] ) ) {
+                update_field( 'nvm_privacy_status', $status['privacyStatus'], $post_id );
+            }
+            if ( isset( $status['publishAt'] ) ) {
+                update_field( 'nvm_scheduled_publish_time', date( 'Y-m-d H:i:s', strtotime( $status['publishAt'] ) ), $post_id );
+            }
+        }
 
         // Update statistics if available
         if ( isset( $statistics['viewCount'] ) ) {
@@ -379,6 +399,72 @@ class NVM_Sync {
         if ( $term ) {
             wp_set_object_terms( $post_id, intval( $term['term_id'] ), NVM_Taxonomies::TYPE_TAXONOMY );
         }
+    }
+
+    /**
+     * Determine WordPress post status and schedule from YouTube video status
+     *
+     * @param array $status YouTube video status data
+     * @param array $snippet YouTube video snippet data
+     * @return array Array with 'post_status', 'post_date', and 'post_date_gmt'
+     */
+    private function get_post_status_from_youtube( $status, $snippet ) {
+        $result = array(
+            'post_status' => 'publish',
+            'post_date' => '',
+            'post_date_gmt' => '',
+        );
+
+        // Get privacy status (public, private, unlisted)
+        $privacy_status = isset( $status['privacyStatus'] ) ? $status['privacyStatus'] : 'public';
+
+        // Get scheduled publish time if set
+        $publish_at = isset( $status['publishAt'] ) ? $status['publishAt'] : '';
+
+        // Get when video was actually published
+        $published_at = isset( $snippet['publishedAt'] ) ? $snippet['publishedAt'] : '';
+
+        error_log( 'NVM Sync - Video privacy: ' . $privacy_status . ', publishAt: ' . $publish_at . ', publishedAt: ' . $published_at );
+
+        // Determine post status based on YouTube status
+        if ( $privacy_status === 'private' && ! empty( $publish_at ) ) {
+            // Video is scheduled for future publication
+            $scheduled_time = strtotime( $publish_at );
+            $current_time = current_time( 'timestamp' );
+
+            if ( $scheduled_time > $current_time ) {
+                // Future scheduled video - set as draft with scheduled date
+                $result['post_status'] = 'future';
+                $result['post_date'] = get_date_from_gmt( gmdate( 'Y-m-d H:i:s', $scheduled_time ) );
+                $result['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $scheduled_time );
+
+                error_log( 'NVM Sync - Video is scheduled for: ' . $result['post_date'] );
+            } else {
+                // Scheduled time has passed but still private - keep as draft
+                $result['post_status'] = 'draft';
+                error_log( 'NVM Sync - Video scheduled time passed but still private, setting as draft' );
+            }
+        } elseif ( $privacy_status === 'private' ) {
+            // Private video with no schedule - set as draft
+            $result['post_status'] = 'draft';
+            error_log( 'NVM Sync - Video is private, setting as draft' );
+        } elseif ( in_array( $privacy_status, array( 'public', 'unlisted' ) ) && ! empty( $published_at ) ) {
+            // Video is published (public or unlisted) - publish immediately
+            $result['post_status'] = 'publish';
+
+            // Use the YouTube publish date as the post date
+            $youtube_publish_time = strtotime( $published_at );
+            $result['post_date'] = get_date_from_gmt( gmdate( 'Y-m-d H:i:s', $youtube_publish_time ) );
+            $result['post_date_gmt'] = gmdate( 'Y-m-d H:i:s', $youtube_publish_time );
+
+            error_log( 'NVM Sync - Video is ' . $privacy_status . ', publishing with date: ' . $result['post_date'] );
+        } else {
+            // Default to publish
+            $result['post_status'] = 'publish';
+            error_log( 'NVM Sync - Video status unclear, defaulting to publish' );
+        }
+
+        return $result;
     }
 }
 

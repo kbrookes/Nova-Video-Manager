@@ -210,7 +210,7 @@ class NVM_YouTube_API {
         }
 
         $params = array(
-            'part' => 'snippet,contentDetails,statistics',
+            'part' => 'snippet,contentDetails,statistics,status',
             'id' => implode( ',', $video_ids ),
         );
 
