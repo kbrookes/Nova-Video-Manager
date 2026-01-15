@@ -108,12 +108,50 @@ Alternatively, go to your channel page and look at the URL:
 - You can disconnect at any time by clicking "Disconnect" in the settings
 - The plugin only requests read-only access to your YouTube data
 
+## IMPORTANT: Publish Your OAuth App to Prevent Weekly Disconnections
+
+**⚠️ If you skip this step, you'll have to re-authenticate every 7 days!**
+
+By default, your OAuth app is in "Testing" mode, which causes refresh tokens to expire after **7 days**. To fix this:
+
+### Option A: Internal App (Recommended for Personal Use)
+
+If you have a Google Workspace account:
+
+1. Go to **APIs & Services** → **OAuth consent screen**
+2. Change **User Type** from "External" to **"Internal"**
+3. Click **Save**
+4. ✅ Tokens will never expire!
+
+### Option B: Publish External App
+
+If you don't have Google Workspace:
+
+1. Go to **APIs & Services** → **OAuth consent screen**
+2. Make sure you have filled in:
+   - App name, support email, developer email
+   - At least one authorized domain (your website domain)
+   - Privacy policy URL (can be a simple page on your site)
+3. Click **Publish App** button
+4. Click **Confirm**
+5. ✅ Tokens will now last indefinitely!
+
+### After Publishing: Re-authenticate!
+
+**Critical**: After publishing, you MUST re-authenticate to get a new long-lived token:
+
+1. Go to WordPress → **Videos** → **Settings**
+2. Click **Disconnect**
+3. Click **Connect to YouTube** again
+4. Complete the OAuth flow
+
 ## Troubleshooting
 
 ### "Redirect URI mismatch" error
 - Make sure the redirect URI in Google Cloud Console exactly matches your WordPress admin URL
 - Check for `http` vs `https`
 - Check for `www` vs non-`www`
+- Check `/wp-content/debug.log` for the exact redirect URI WordPress is using
 
 ### "Access denied" error
 - Make sure you added your Google account as a test user in the OAuth consent screen
@@ -123,7 +161,44 @@ Alternatively, go to your channel page and look at the URL:
 - Make sure you saved your OAuth credentials before clicking "Connect to YouTube"
 - Make sure you enabled the YouTube Data API v3 in Google Cloud Console
 
+### "This app hasn't been verified" warning
+- This is normal for external apps
+- Click "Advanced" → "Go to [App Name] (unsafe)"
+- This is safe for your own app
+- Only needed for external apps that aren't verified
+
+### OAuth connection keeps disconnecting every week
+
+**This is the #1 issue!**
+
+**Cause**: Your OAuth app is in "Testing" mode (7-day token expiry)
+
+**Solution**:
+1. Follow the "Publish Your OAuth App" section above
+2. After publishing, re-authenticate in WordPress
+3. Check WordPress admin for OAuth status notices
+4. Verify in `/wp-content/debug.log` that tokens refresh successfully
+
+### Can't find "Publish App" button
+
+Make sure you've completed all required fields in the OAuth consent screen:
+- App name
+- User support email
+- Developer contact email
+- At least one authorized domain
+- Privacy policy URL (for external apps)
+
+## Publishing Status Reference
+
+| Mode | Token Lifespan | Re-auth Frequency | Best For |
+|------|---------------|-------------------|----------|
+| Testing | 7 days | Weekly | Development only |
+| Published (External) | Indefinite | Never | Production |
+| Internal | Indefinite | Never | Personal use (Google Workspace) |
+
 ## Support
 
 For issues or questions, please refer to the plugin documentation or contact support.
+
+**Admin Notices**: The plugin will show warnings in WordPress admin if your OAuth connection needs attention.
 

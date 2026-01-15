@@ -53,6 +53,9 @@ class NVM_OAuth {
     private function __construct() {
         // Run callback early (priority 5) to intercept before page renders
         add_action( 'admin_init', array( $this, 'handle_oauth_callback' ), 5 );
+
+        // Add admin notice for OAuth issues
+        add_action( 'admin_notices', array( $this, 'oauth_status_notice' ) );
     }
     
     /**
@@ -87,6 +90,7 @@ class NVM_OAuth {
         $refresh_token = $this->get_decrypted_option( 'nvm_oauth_refresh_token' );
         $expires_at = get_option( 'nvm_oauth_expires_at', 0 );
         $authenticated_at = get_option( 'nvm_oauth_authenticated_at', 0 );
+        $last_refresh_error = get_option( 'nvm_oauth_last_refresh_error', '' );
 
         $status = array(
             'has_access_token' => ! empty( $access_token ),
@@ -95,6 +99,7 @@ class NVM_OAuth {
             'authenticated_at' => $authenticated_at,
             'is_expired' => $expires_at && time() >= $expires_at,
             'time_until_expiry' => $expires_at ? $expires_at - time() : 0,
+            'last_refresh_error' => $last_refresh_error,
         );
 
         // Check if authentication is old (might indicate refresh token issues)
@@ -107,9 +112,85 @@ class NVM_OAuth {
             if ( $days_since_auth > 150 ) { // ~5 months
                 $status['warning'] = 'OAuth connection is old. If sync fails, you may need to re-authenticate.';
             }
+
+            // Check if OAuth app might be in testing mode (7-14 day token expiry)
+            if ( $days_since_auth > 7 && $last_refresh_error ) {
+                $status['warning'] = 'OAuth tokens may be expiring frequently. Your Google OAuth app might be in Testing mode. See documentation for how to publish it.';
+            }
         }
 
         return $status;
+    }
+
+    /**
+     * Display admin notice for OAuth status issues
+     */
+    public function oauth_status_notice() {
+        // Only show on plugin pages
+        $screen = get_current_screen();
+        if ( ! $screen || strpos( $screen->id, 'nvm_video' ) === false ) {
+            return;
+        }
+
+        // Only show to admins
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        $status = $this->get_token_status();
+
+        // Check for refresh errors
+        if ( ! empty( $status['last_refresh_error'] ) ) {
+            $settings_url = admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings' );
+            ?>
+            <div class="notice notice-error">
+                <p>
+                    <strong><?php esc_html_e( 'Nova Video Manager: OAuth Authentication Issue', 'nova-video-manager' ); ?></strong>
+                </p>
+                <p>
+                    <?php esc_html_e( 'Your YouTube connection has expired and automatic refresh failed. This usually happens when:', 'nova-video-manager' ); ?>
+                </p>
+                <ul style="list-style: disc; margin-left: 20px;">
+                    <li><?php esc_html_e( 'Your Google OAuth app is in "Testing" mode (tokens expire after 7 days)', 'nova-video-manager' ); ?></li>
+                    <li><?php esc_html_e( 'The refresh token has been revoked or expired', 'nova-video-manager' ); ?></li>
+                </ul>
+                <p>
+                    <strong><?php esc_html_e( 'Action Required:', 'nova-video-manager' ); ?></strong>
+                    <a href="<?php echo esc_url( $settings_url ); ?>" class="button button-primary">
+                        <?php esc_html_e( 'Reconnect to YouTube', 'nova-video-manager' ); ?>
+                    </a>
+                </p>
+                <p>
+                    <em><?php esc_html_e( 'To prevent this from happening every week, publish your Google OAuth app to Production. See OAUTH_SETUP.md for instructions.', 'nova-video-manager' ); ?></em>
+                </p>
+            </div>
+            <?php
+        }
+        // Check for old authentication (approaching 6 months)
+        elseif ( isset( $status['days_since_auth'] ) && $status['days_since_auth'] > 150 ) {
+            $settings_url = admin_url( 'edit.php?post_type=' . NVM_Post_Type::POST_TYPE . '&page=nvm-settings' );
+            ?>
+            <div class="notice notice-warning">
+                <p>
+                    <strong><?php esc_html_e( 'Nova Video Manager: OAuth Connection Aging', 'nova-video-manager' ); ?></strong>
+                </p>
+                <p>
+                    <?php
+                    printf(
+                        /* translators: %d: number of days since authentication */
+                        esc_html__( 'Your YouTube connection is %d days old. Google refresh tokens can expire after 6 months of inactivity.', 'nova-video-manager' ),
+                        (int) $status['days_since_auth']
+                    );
+                    ?>
+                </p>
+                <p>
+                    <a href="<?php echo esc_url( $settings_url ); ?>" class="button">
+                        <?php esc_html_e( 'Refresh Connection', 'nova-video-manager' ); ?>
+                    </a>
+                </p>
+            </div>
+            <?php
+        }
     }
     
     /**
@@ -322,8 +403,13 @@ class NVM_OAuth {
             update_option( 'nvm_oauth_expires_at', $expires_at );
         }
 
-        // Store authentication timestamp
-        update_option( 'nvm_oauth_authenticated_at', time() );
+        // Store authentication timestamp (only update if we got a new refresh token)
+        if ( isset( $tokens['refresh_token'] ) ) {
+            update_option( 'nvm_oauth_authenticated_at', time() );
+        }
+
+        // Clear any previous errors
+        delete_option( 'nvm_oauth_last_refresh_error' );
     }
 
     /**
@@ -362,8 +448,10 @@ class NVM_OAuth {
         $refresh_token = $this->get_decrypted_option( 'nvm_oauth_refresh_token' );
 
         if ( ! $refresh_token ) {
-            error_log( 'NVM OAuth - No refresh token available. User needs to re-authenticate.' );
-            return new WP_Error( 'no_refresh_token', __( 'No refresh token available. Please re-authenticate.', 'nova-video-manager' ) );
+            $error_msg = __( 'No refresh token available. Please re-authenticate.', 'nova-video-manager' );
+            error_log( 'NVM OAuth - ' . $error_msg );
+            update_option( 'nvm_oauth_last_refresh_error', $error_msg );
+            return new WP_Error( 'no_refresh_token', $error_msg );
         }
 
         $client_id = get_option( 'nvm_oauth_client_id' );
@@ -382,6 +470,7 @@ class NVM_OAuth {
 
         if ( is_wp_error( $response ) ) {
             error_log( 'NVM OAuth - Refresh request failed: ' . $response->get_error_message() );
+            update_option( 'nvm_oauth_last_refresh_error', $response->get_error_message() );
             return $response;
         }
 
@@ -395,10 +484,14 @@ class NVM_OAuth {
             error_log( 'NVM OAuth - Refresh failed: ' . $error_msg );
 
             // Common errors:
-            // - invalid_grant: Refresh token expired or revoked
+            // - invalid_grant: Refresh token expired or revoked (often means OAuth app is in Testing mode)
             // - invalid_client: Client credentials are wrong
             if ( $body['error'] === 'invalid_grant' ) {
-                error_log( 'NVM OAuth - Refresh token is invalid or expired. User needs to re-authenticate.' );
+                $detailed_error = __( 'Refresh token is invalid or expired. This often happens when your Google OAuth app is in "Testing" mode (tokens expire after 7 days). Please re-authenticate and consider publishing your OAuth app to Production.', 'nova-video-manager' );
+                error_log( 'NVM OAuth - ' . $detailed_error );
+                update_option( 'nvm_oauth_last_refresh_error', $detailed_error );
+            } else {
+                update_option( 'nvm_oauth_last_refresh_error', $error_msg );
             }
 
             return new WP_Error( 'refresh_error', $error_msg );
@@ -406,6 +499,10 @@ class NVM_OAuth {
 
         // Store new access token
         $this->store_tokens( $body );
+
+        // Clear any previous error
+        delete_option( 'nvm_oauth_last_refresh_error' );
+
         error_log( 'NVM OAuth - Access token refreshed successfully' );
 
         return true;
